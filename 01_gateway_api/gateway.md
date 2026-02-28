@@ -1,98 +1,82 @@
-# Gateway API and Cilium Setup
+# Gateway API with Envoy Gateway
 
-This document describes the steps to install and configure Cilium with Kubernetes Gateway API support, and how to expose an NGINX deployment securely.
+This document describes the steps to install and configure Envoy Gateway with Kubernetes Gateway API support, and how to expose a backend application via an HTTPRoute.
 
-## 1. Install Gateway API CRDs
-Before installing Cilium with Gateway API support, the standard Kubernetes Gateway API Custom Resource Definitions (CRDs) must be installed in the cluster. We use the standard sig-network repository for these CRDs.
+## 1. Install Envoy Gateway via Helm
 
-```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_gatewayclasses.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_gateways.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_httproutes.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.1.0/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
-```
-
-## 2. Install Cilium via Helm
-We will install Cilium using Helm and explicitly enable Gateway API support. This allows Cilium to act as the Gateway controller.
+Install the Envoy Gateway controller using the official Helm chart:
 
 ```bash
-helm repo add cilium https://helm.cilium.io/
-helm repo update
-helm install cilium cilium/cilium --version 1.19.1 \
-  --namespace kube-system \
-  --set kubeProxyReplacement=true \
-  --set gatewayAPI.enabled=true
+helm upgrade --install envoy-gateway oci://docker.io/envoyproxy/gateway-helm \
+  --version v1.7.0 -n envoy-gateway-system \
+  --create-namespace
 ```
 
-Wait for the Cilium pods to be ready before proceeding.
-
-## 3. Deploy NGINX Application
-We'll deploy a simple NGINX application and a Service that exposes it on port 80.
+Wait for the controller to be ready:
 
 ```bash
-kubectl apply -f nginx.yaml
+kubectl wait --timeout=5m -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
 ```
 
-## 4. Configure Gateway API Resources
-We need to create the `GatewayClass`, `Gateway`, and `HTTPRoute` to route traffic to our NGINX service for the hostname `my-app.local`.
+## 2. Configure Gateway API Resources
 
-Create a file `gateway.yaml`:
+The `gateway.yaml` file defines the `GatewayClass` and `Gateway`:
 
-```yaml
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: cilium
-spec:
-  controllerName: io.cilium/gateway-controller
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: Gateway
-metadata:
-  name: my-gateway
-  namespace: default
-spec:
-  gatewayClassName: cilium
-  listeners:
-  - name: http
-    protocol: HTTP
-    port: 80
-    hostname: my-app.local
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: nginx-route
-  namespace: default
-spec:
-  parentRefs:
-  - name: my-gateway
-  hostnames:
-  - my-app.local
-  rules:
-  - matches:
-    - path:
-        type: PathPrefix
-        value: /
-    backendRefs:
-    - name: nginx
-      port: 80
-```
+- **GatewayClass** (`envoy-gateway-class`) — references the Envoy Gateway controller.
+- **Gateway** (`main-gateway`) — listens on port 80 for HTTP traffic and accepts routes from all namespaces.
 
-Apply these resources:
+See [`gateway.yaml`](gateway.yaml) for the full resource definitions.
+
+Apply:
+
 ```bash
 kubectl apply -f gateway.yaml
 ```
 
-## 5. Local DNS Configuration
-To test this locally from your machine, you need to map `my-app.local` to the IP address of the Gateway.
-Find the Gateway IP:
+## 3. Deploy the Backend Application
+
+The `nginx.yaml` file deploys a backend echo service in the `application` namespace. It includes:
+
+- A **ServiceAccount**, **Service** (port 3000), and **Deployment** using the `echo-basic` image.
+- An **HTTPRoute** (`backend`) that attaches to the `main-gateway` in the `default` namespace and routes traffic for `my-app.local` to the backend service on port 3000.
+
+Create the namespace and apply:
+
 ```bash
-kubectl get gateway my-gateway
+kubectl create namespace application --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f nginx.yaml
 ```
-Then add an entry to your `/etc/hosts` file:
+
+## 4. Local DNS Configuration
+
+Map `my-app.local` to `127.0.0.1` in your hosts file:
+
+- **Linux/macOS:** `/etc/hosts`
+- **Windows:** `C:\Windows\System32\drivers\etc\hosts`
+
 ```
-<GATEWAY_IP> my-app.local
+127.0.0.1 my-app.local
+```
+
+## 5. Accessing the Application
+
+On local clusters (Podman, Docker Desktop, etc.) the Gateway's `LoadBalancer` service won't get an external IP. You need to port-forward the Envoy proxy service:
+
+```bash
+kubectl port-forward svc/envoy-default-main-gateway-0c7e158b -n envoy-gateway-system 80:80
+```
+
+> **Note:** The service name is generated by Envoy Gateway. Find it with:
+> ```bash
+> kubectl get svc -n envoy-gateway-system
+> ```
+
+Once port-forwarding is active, open [http://my-app.local/](http://my-app.local/) in your browser.
+
+## Automated Setup
+
+The `setup.sh` script automates steps 1–3. It is idempotent and can be run multiple times:
+
+```bash
+./setup.sh
 ```
