@@ -1,0 +1,70 @@
+## Custom values for kube-prometheus-stack Helm chart
+
+## Grafana configuration
+grafana:
+  enabled: true
+  adminPassword: admin
+  service:
+    type: ClusterIP
+    port: 80
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  ## Persistence configuration
+  persistence:
+    enabled: true
+    accessModes: ["ReadWriteOnce"]
+    size: 5Gi
+
+## Prometheus configuration
+prometheus:
+  prometheusSpec:
+    ## Scrape ServiceMonitors/PodMonitors with label release: prometheus
+    serviceMonitorSelector:
+      matchLabels:
+        release: prometheus
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+    podMonitorSelector:
+      matchLabels:
+        release: prometheus
+    podMonitorSelectorNilUsesHelmValues: false
+
+    ## Resource limits
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 2Gi
+        cpu: 1000m
+
+    ## Retention period
+    retention: 60d
+
+    ## Storage configuration
+    ## To specify storage size, define the volumeClaimTemplate below.
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+## Alertmanager configuration
+alertmanager:
+  enabled: true
+
+## Node exporter for host-level metrics
+nodeExporter:
+  enabled: true
+
+## kube-state-metrics for Kubernetes object metrics
+kubeStateMetrics:
+  enabled: true

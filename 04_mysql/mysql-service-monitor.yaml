@@ -1,0 +1,21 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mysql-cluster-monitor
+  namespace: monitoring
+  labels:
+    app: mysql-cluster
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - mysql
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: mysql-cluster
+      app.kubernetes.io/component: mysql
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+
