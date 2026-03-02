@@ -18,11 +18,12 @@ Envoy Gateway natively supports the Kubernetes Gateway API, and a backend applic
 - **Step 3.2:** Install the `kube-prometheus-stack` (via Helm), which provides Prometheus, Grafana, and standard Kubernetes node exporters.
 - **Step 3.3:** Configure Prometheus `ServiceMonitors` or `PodMonitors` to discover and scrape metrics from Envoy Gateway, the backend application, and the MySQL cluster.
 
-## 4. MySQL Cluster via Percona Operator
-- **Step 4.1:** Add the Percona Helm repository to your local Helm configuration.
-- **Step 4.2:** Install the Percona Operator for MySQL.
-- **Step 4.3:** Create a Kubernetes `Secret` to securely hold the MySQL root and user passwords.
-- **Step 4.4:** Deploy the Custom Resource (CR) - e.g., `PerconaXtraDBCluster` or `InnoDBCluster` depending on the operator version - to provision the MySQL database instances.
+## 4. MySQL InnoDB Cluster via Percona Operator
+- **Step 4.1:** Add the Percona Helm repository and install the Percona Operator for MySQL (`ps-operator`).
+- **Step 4.2:** Create a Kubernetes `Secret` to securely hold the MySQL root and application user passwords.
+- **Step 4.3:** Deploy the `PerconaServerMySQL` CR with 3-node InnoDB group replication and MySQL Router.
+- **Step 4.4:** Deploy a `mysqld_exporter` sidecar on each MySQL pod and create a `ServiceMonitor` for Prometheus scraping.
+- **Step 4.5:** Configure scheduled S3 backups (daily, 7-day retention) with credentials stored in a Kubernetes `Secret`.
 
 ## Verification Plan
 After deploying everything, we will do the following checks:

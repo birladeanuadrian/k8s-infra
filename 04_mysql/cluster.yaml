@@ -1,0 +1,85 @@
+apiVersion: ps.percona.com/v1
+kind: PerconaServerMySQL
+metadata:
+  name: mysql-cluster
+  namespace: mysql
+spec:
+  crVersion: 1.0.0
+
+  secretsName: mysql-cluster-secrets
+
+  mysql:
+    clusterType: group-replication
+    autoRecovery: true
+    size: 3
+    image: percona/percona-server:8.0.45
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    volumeSpec:
+      persistentVolumeClaim:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+    sidecars:
+      - name: mysqld-exporter
+        image: prom/mysqld-exporter:v0.18.0
+        ports:
+          - name: metrics
+            containerPort: 9104
+        env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-cluster-secrets
+                key: ROOT_PASSWORD
+          - name: DATA_SOURCE_NAME
+            value: "root:$(MYSQL_ROOT_PASSWORD)@(localhost:3306)/"
+        args:
+          - "--collect.info_schema.innodb_metrics"
+          - "--collect.info_schema.innodb_tablespaces"
+          - "--collect.info_schema.processlist"
+          - "--collect.engine_innodb_status"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+
+  router:
+    size: 1
+    image: percona/percona-mysql-router:8.0.45
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+  backup:
+    enabled: true
+    image: percona/percona-server-mysql-operator:1.0.0-backup
+    storages:
+      s3-backup:
+        type: s3
+        s3:
+          bucket: mysql-backups
+          region: eu-central-1
+          credentialsSecret: mysql-s3-backup-credentials
+          ## For S3-compatible storage (e.g. MinIO), uncomment and set:
+          # endpointUrl: https://minio.example.com
+    schedule:
+      - name: daily-backup
+        schedule: "0 3 * * *"
+        keep: 7
+        storageName: s3-backup
+
+
