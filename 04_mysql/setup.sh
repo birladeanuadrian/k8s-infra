@@ -1,5 +1,3 @@
-#!/bin/bash
-
 set -e
 
 # Load .env file automatically if it exists
