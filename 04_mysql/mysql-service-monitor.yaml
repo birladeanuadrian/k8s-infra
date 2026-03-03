@@ -18,4 +18,23 @@ spec:
     - port: metrics
       path: /metrics
       interval: 15s
-
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mysql-router-monitor
+  namespace: monitoring
+  labels:
+    release: prometheus
+spec:
+  namespaceSelector:
+    matchNames:
+      - mysql
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: mysql-cluster
+      app.kubernetes.io/component: router
+  endpoints:
+    - port: metrics
+      path: /api/20190715/metrics
+      interval: 15s

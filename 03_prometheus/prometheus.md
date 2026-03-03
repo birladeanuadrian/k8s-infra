@@ -4,20 +4,23 @@ This document describes how to set up Prometheus monitoring using the `kube-prom
 
 ## 1. Install kube-prometheus-stack via Helm
 
-Add the Prometheus community Helm repository and install the stack:
+Add the Prometheus community Helm repository and install the stack. The `values.yaml` file requires the `GRAFANA_ADMIN_PASSWORD` environment variable to be set. You also need to set `PROMETHEUS_ADMIN_PASSWORD` for Basic Auth access to Prometheus.
 
 ```bash
+export GRAFANA_ADMIN_PASSWORD=<your-admin-password>
+export PROMETHEUS_ADMIN_PASSWORD=<your-prometheus-password>
+
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
-helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+envsubst < values.yaml | helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
   --version 82.4.3 \
   -n monitoring \
-  -f values.yaml
+  -f -
 ```
 
 This installs:
-- **Prometheus** — metrics collection and alerting
-- **Grafana** — dashboards and visualization (default credentials: `admin` / `admin`)
+- **Prometheus** — metrics collection and alerting (secured via Basic Auth, user: `admin`, password: `PROMETHEUS_ADMIN_PASSWORD`)
+- **Grafana** — dashboards and visualization (default user: `admin`, password: as set in `GRAFANA_ADMIN_PASSWORD`)
 - **Alertmanager** — alert routing and notifications
 - **Node Exporter** — host-level metrics
 - **kube-state-metrics** — Kubernetes object metrics
@@ -130,14 +133,22 @@ kubectl apply -f envoy-data-plane-monitor.yaml
 
 With these routes, you can access the UIs via the Gateway (ensure you have port-forwarded the Envoy service or have a LoadBalancer IP, and added entries to your `/etc/hosts`):
 
-- **Prometheus:** `http://prometheus.local/`
 - **Grafana:** `http://grafana.local/`
 
 You need to add these to your hosts file:
 ```
-127.0.0.1 prometheus.local
 127.0.0.1 grafana.local
 ```
+
+### Accessing Prometheus
+
+Since Prometheus is not exposed via the Gateway, use port-forwarding:
+
+```bash
+kubectl port-forward svc/prometheus-kube-prometheus-prometheus -n monitoring 9090:9090
+```
+
+Then access at [http://127.0.0.1:9090/](http://127.0.0.1:9090/).
 
 ## Automated Setup
 

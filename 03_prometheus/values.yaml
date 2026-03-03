@@ -3,7 +3,7 @@
 ## Grafana configuration
 grafana:
   enabled: true
-  adminPassword: admin
+  adminPassword: "${GRAFANA_ADMIN_PASSWORD}"
   service:
     type: ClusterIP
     port: 80

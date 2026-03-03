@@ -2,6 +2,14 @@
 
 set -e
 
+# Load .env file automatically if it exists
+if [ -f .env ]; then
+  echo "Loading variables from .env..."
+  set -a
+  source .env
+  set +a
+fi
+
 # Required environment variables:
 #   MYSQL_ROOT_PASSWORD    - Root password for the MySQL cluster
 #   MYSQL_DATABASE         - Application database name
@@ -59,14 +67,13 @@ envsubst < secrets.yaml | kubectl apply -f -
 echo "6. Creating S3 backup credentials secret..."
 envsubst < s3-backup-secret.yaml | kubectl apply -f -
 
+echo "6.1. Creating mysqld_exporter config secret..."
+envsubst < mysql-exporter-config.yaml | kubectl apply -f -
+
 echo "7. Deploying MySQL InnoDB Cluster (3 nodes)..."
 kubectl apply -f cluster.yaml
 
-echo "8. Waiting for MySQL cluster pods to be ready (this may take several minutes)..."
-kubectl wait --timeout=10m -n mysql pod -l app.kubernetes.io/instance=mysql-cluster --for=condition=Ready || \
-  echo "Warning: Timed out waiting for all MySQL pods. Check status with: kubectl get pods -n mysql"
-
-echo "9. Applying ServiceMonitor for Prometheus..."
+echo "8. Applying ServiceMonitor for Prometheus..."
 kubectl apply -f mysql-service-monitor.yaml
 
 echo "Setup completed."
@@ -79,6 +86,3 @@ echo ""
 echo "To connect from a local MySQL client, port-forward the router service:"
 echo "  kubectl port-forward svc/mysql-cluster-router -n mysql 3306:3306"
 echo "  mysql -h 127.0.0.1 -P 3306 -u root -p"
-
-
-

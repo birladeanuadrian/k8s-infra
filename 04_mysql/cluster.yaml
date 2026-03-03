@@ -13,6 +13,27 @@ spec:
     autoRecovery: true
     size: 3
     image: percona/percona-server:8.0.45
+    env:
+      - name: MYSQL_ROOT_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: mysql-cluster-secrets
+            key: ROOT_PASSWORD
+      - name: MYSQL_DATABASE
+        valueFrom:
+          secretKeyRef:
+            name: mysql-cluster-secrets
+            key: DATABASE
+      - name: MYSQL_USER
+        valueFrom:
+          secretKeyRef:
+            name: mysql-cluster-secrets
+            key: USER
+      - name: MYSQL_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: mysql-cluster-secrets
+            key: PASSWORD
     resources:
       requests:
         cpu: 250m
@@ -38,13 +59,16 @@ spec:
               secretKeyRef:
                 name: mysql-cluster-secrets
                 key: ROOT_PASSWORD
-          - name: DATA_SOURCE_NAME
-            value: "root:$(MYSQL_ROOT_PASSWORD)@(localhost:3306)/"
         args:
+          - "--config.my-cnf=/etc/mysqld_exporter/.my.cnf"
           - "--collect.info_schema.innodb_metrics"
           - "--collect.info_schema.innodb_tablespaces"
           - "--collect.info_schema.processlist"
           - "--collect.engine_innodb_status"
+        volumeMounts:
+          - name: exporter-config
+            mountPath: /etc/mysqld_exporter/.my.cnf
+            subPath: .my.cnf
         resources:
           requests:
             cpu: 50m
@@ -52,21 +76,31 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
+    sidecarVolumes:
+      - name: exporter-config
+        secret:
+          secretName: mysqld-exporter-config
 
-  router:
-    size: 1
-    image: percona/percona-mysql-router:8.0.45
-    resources:
-      requests:
-        cpu: 100m
-        memory: 128Mi
-      limits:
-        cpu: 500m
-        memory: 512Mi
+  proxy:
+    router:
+      enabled: true
+      size: 2
+      image: percona/percona-mysql-router:8.0.45
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+    haproxy:
+      enabled: false
+      image: perconalab/haproxy:main
+      size: 0
 
   backup:
     enabled: true
-    image: percona/percona-server-mysql-operator:1.0.0-backup
+    image: percona/percona-xtrabackup:8.0.35-34
     storages:
       s3-backup:
         type: s3
@@ -74,12 +108,9 @@ spec:
           bucket: mysql-backups
           region: eu-central-1
           credentialsSecret: mysql-s3-backup-credentials
-          ## For S3-compatible storage (e.g. MinIO), uncomment and set:
-          # endpointUrl: https://minio.example.com
+          endpointUrl: https://s3-vaina.nmbapp.net
     schedule:
       - name: daily-backup
         schedule: "0 3 * * *"
         keep: 7
         storageName: s3-backup
-
-
