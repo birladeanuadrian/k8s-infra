@@ -58,11 +58,6 @@ Apply:
 kubectl apply -f cluster.yaml
 ```
 
-Wait for the cluster to be ready (this may take several minutes):
-
-```bash
-kubectl wait --timeout=10m -n mysql pod -l app.kubernetes.io/instance=mysql-cluster --for=condition=Ready
-```
 
 ## 4. S3 Backups
 
@@ -114,7 +109,16 @@ EOF
 kubectl get ps-backup -n mysql
 ```
 
-## 5. Prometheus Monitoring
+## 5. MySQL Exporter Configuration
+
+The `mysqld_exporter` requires a configuration file with database credentials. The `mysql-exporter-config.yaml` template creates a Secret mounted by the exporter sidecar.
+
+Apply:
+```bash
+envsubst < mysql-exporter-config.yaml | kubectl apply -f -
+```
+
+## 6. Prometheus Monitoring
 
 The `mysql-service-monitor.yaml` file creates a `ServiceMonitor` that instructs Prometheus to scrape the `mysqld_exporter` sidecar running on each MySQL pod. It uses the `release: prometheus` label to be picked up by the kube-prometheus-stack.
 
@@ -146,7 +150,7 @@ Apply:
 kubectl apply -f mysql-service-monitor.yaml
 ```
 
-## 6. Accessing the Cluster
+## 7. Accessing the Cluster
 
 ### From within the cluster
 
@@ -179,8 +183,3 @@ The `setup.sh` script automates all steps. It is idempotent and can be run multi
 ```bash
 ./setup.sh
 ```
-
-
-
-
-
