@@ -32,12 +32,11 @@ spec:
   type: ClusterIP
   clusterIP: None
   ports:
-  - name: metrics
+  - name: router-metrics
     port: 8443
     targetPort: 8443
     protocol: TCP
   selector:
     app.kubernetes.io/instance: mysql-cluster
-    app.kubernetes.io/component: proxy
-    app.kubernetes.io/name: router
-
+    app.kubernetes.io/component: router
+    app.kubernetes.io/name: mysql-router

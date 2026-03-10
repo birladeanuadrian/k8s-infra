@@ -93,6 +93,13 @@ spec:
         limits:
           cpu: 500m
           memory: 512Mi
+      configuration: |
+        [http_server]
+        port=8443
+        ssl=0
+        bind_address=0.0.0.0
+
+        [rest_api]
     haproxy:
       enabled: false
       image: perconalab/haproxy:main

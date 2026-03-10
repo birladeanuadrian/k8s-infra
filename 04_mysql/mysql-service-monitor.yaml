@@ -35,6 +35,6 @@ spec:
       app.kubernetes.io/instance: mysql-cluster
       app.kubernetes.io/component: router
   endpoints:
-    - port: metrics
-      path: /api/20190715/metrics
+    - port: router-metrics
+      path: /metrics
       interval: 15s
