@@ -10,7 +10,7 @@ spec:
   type: ClusterIP
   clusterIP: None
   ports:
-  - name: metrics
+  - name: http-metrics
     port: 9104
     targetPort: 9104
     protocol: TCP
@@ -32,7 +32,7 @@ spec:
   type: ClusterIP
   clusterIP: None
   ports:
-  - name: router-metrics
+  - name: http-router-metrics
     port: 8443
     targetPort: 8443
     protocol: TCP

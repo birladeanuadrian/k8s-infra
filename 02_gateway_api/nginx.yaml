@@ -14,7 +14,7 @@ metadata:
     service: backend
 spec:
   ports:
-    - name: http
+    - name: http-backend
       port: 3000
       targetPort: 3000
   selector:
@@ -43,7 +43,8 @@ spec:
           imagePullPolicy: IfNotPresent
           name: backend
           ports:
-            - containerPort: 3000
+            - name: http-backend
+              containerPort: 3000
           env:
             - name: POD_NAME
               valueFrom:

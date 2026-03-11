@@ -25,8 +25,17 @@ Envoy Gateway natively supports the Kubernetes Gateway API, and a backend applic
 - **Step 4.4:** Deploy a `mysqld_exporter` sidecar on each MySQL pod and create a `ServiceMonitor` for Prometheus scraping.
 - **Step 4.5:** Configure scheduled S3 backups (daily, 7-day retention) with credentials stored in a Kubernetes `Secret`.
 
+## 5. Istio Service Mesh (Ambient Mode)
+- **Step 5.1:** Install Istio CLI (`istioctl`) on your local machine and install Istio into the cluster using the `ambient` profile.
+- **Step 5.2:** Verify installation of key components: `istiod`, `ztunnel` (DaemonSet), and `istio-cni` (DaemonSet).
+- **Step 5.3:** Enable Ambient mode for all application namespaces (e.g., `default`, `mysql`, `monitoring`) by applying the label `istio.io/dataplane-mode=ambient`.
+- **Step 5.4:** Configure strict mTLS for the entire mesh by applying a cluster-wide `PeerAuthentication` policy with `mtls.mode: STRICT`.
+- **Step 5.5:** Create `AuthorizationPolicy` rules to define allowed service-to-service communication (e.g., allow `gateway` to talk to `backend`, deny others).
+- **Step 5.6:** Verify mTLS enforcement and access control ensuring only authorized services can communicate.
+
 ## Verification Plan
 After deploying everything, we will do the following checks:
 1. **Routing:** Access the backend service through the Envoy Gateway API (via port-forward or LoadBalancer).
 2. **Observability:** Port-forward to the Prometheus UI and ensure targets (Envoy Gateway, MySQL, backend) show up as `UP`.
 3. **Database:** Exec into a pod containing a MySQL client, securely connect using the provided secrets, and verify database cluster topology.
+4. **Service Mesh (Ambient):** Validate that services are part of the mesh (ztunnel handling traffic), mTLS is enforced, and AuthorizationPolicies restrict unauthorized access.

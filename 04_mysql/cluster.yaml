@@ -51,7 +51,7 @@ spec:
       - name: mysqld-exporter
         image: prom/mysqld-exporter:v0.18.0
         ports:
-          - name: metrics
+          - name: http-metrics
             containerPort: 9104
         env:
           - name: MYSQL_ROOT_PASSWORD

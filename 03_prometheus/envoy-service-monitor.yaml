@@ -14,7 +14,7 @@ spec:
     matchLabels:
       control-plane: envoy-gateway
   endpoints:
-    - port: metrics
+    - port: http-metrics
       path: /metrics
       interval: 15s
 
