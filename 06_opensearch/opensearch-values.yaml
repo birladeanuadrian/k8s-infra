@@ -1,0 +1,75 @@
+clusterName: "opensearch-cluster"
+nodeGroup: "master"
+
+# Single node for dev/test environment to specify resources
+replicas: 3
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+persistence:
+  enabled: true
+  size: "10Gi"
+  accessModes:
+    - ReadWriteOnce
+
+config:
+  opensearch.yml:
+    bootstrap.memory_lock: false # Disable memory locking since we are in k8s environment (unless privileged)
+    plugins.security.ssl.http.enabled: false
+    plugins.security.ssl.transport.enabled: true
+    plugins.security.ssl.transport.pemkey_filepath: certificates/transport-key.pem
+    plugins.security.ssl.transport.pemcert_filepath: certificates/transport.pem
+    plugins.security.ssl.transport.pemtrustedcas_filepath: certificates/transport-ca.pem
+    plugins.security.ssl.transport.enforce_hostname_verification: false
+    plugins.security.ssl.http.clientauth_mode: NONE
+    plugins.security.authcz.admin_dn:
+      - CN=admin
+    plugins.security.nodes_dn:
+      - CN=node
+    
+    network.bind_host: "0.0.0.0"
+    network.publish_host: "${POD_NAME}.opensearch-cluster-master-headless.${NAMESPACE}.svc.cluster.local"
+
+    plugins.security.allow_default_init_securityindex: true
+
+    # S3 Repository Settings (if applicable to opensearch.yml, otherwise via API)
+    # Most settings are dynamic via API, only keystore is needed for sensitive data.
+    # s3.client.default.endpoint will be set via Helm --set in setup.sh
+
+extraVolumes:
+  - name: transport-certs
+    secret:
+      secretName: opensearch-transport-certs
+
+extraVolumeMounts:
+  - name: transport-certs
+    mountPath: /usr/share/opensearch/config/certificates
+    readOnly: true
+
+# Add S3 credentials to the keystore
+keystore:
+  - secretName: opensearch-s3-secret
+
+sysctlInit:
+  enabled: true # Needed for mmap counts
+
+extraEnvs:
+  - name: POD_NAME
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.name
+  - name: NAMESPACE
+    valueFrom:
+      fieldRef:
+        fieldPath: metadata.namespace
+
+plugins:
+  enabled: true
+  installList:
+    - repository-s3

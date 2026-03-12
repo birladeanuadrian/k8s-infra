@@ -1,2 +1,3 @@
 /04_mysql/.env
 /03_prometheus/.env
+/06_opensearch/.env
