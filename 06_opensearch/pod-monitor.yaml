@@ -1,0 +1,25 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: opensearch-exporter
+  namespace: opensearch
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: opensearch
+      app.kubernetes.io/name: opensearch
+  podMetricsEndpoints:
+  - port: http
+    path: /_prometheus/metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    basicAuth:
+      password:
+        name: opensearch-exporter-creds
+        key: password
+      username:
+        name: opensearch-exporter-creds
+        key: username
+

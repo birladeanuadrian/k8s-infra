@@ -47,6 +47,52 @@ spec:
               echo "Failed to create user. HTTP Status: $response"
               exit 1
             fi
+
+            echo "Creating 'prometheus_exporter_role'..."
+            role_response=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "http://opensearch-cluster-master:9200/_plugins/_security/api/roles/prometheus_exporter_role" \
+              -H "Authorization: Basic $AUTH_CRED" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "cluster_permissions": [
+                    "cluster:monitor/prometheus/metrics",
+                    "cluster:monitor/health",
+                    "cluster:monitor/nodes/stats",
+                    "cluster:monitor/state",
+                    "cluster:monitor/stats",
+                    "cluster:monitor/nodes/info",
+                    "cluster:monitor/task"
+                ],
+                "index_permissions": [{
+                    "index_patterns": ["*"],
+                    "allowed_actions": [
+                        "indices:monitor/stats",
+                        "indices:monitor/settings/get",
+                        "indices:monitor/recovery"
+                    ]
+                }]
+              }')
+
+            if [ "$role_response" -eq 200 ] || [ "$role_response" -eq 201 ]; then
+               echo "Role created/updated."
+            else
+               echo "Failed to create role. HTTP Status: $role_response"
+               exit 1
+            fi
+
+            echo "Mapping 'prometheus_exporter_role' to 'prom_exporter'..."
+            mapping_response=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "http://opensearch-cluster-master:9200/_plugins/_security/api/rolesmapping/prometheus_exporter_role" \
+              -H "Authorization: Basic $AUTH_CRED" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "users": ["prom_exporter"]
+              }')
+
+            if [ "$mapping_response" -eq 200 ] || [ "$mapping_response" -eq 201 ]; then
+               echo "Role mapping created/updated."
+            else
+               echo "Failed to create role mapping. HTTP Status: $mapping_response"
+               exit 1
+            fi
         env:
           - name: EXPORTER_PASSWORD
             valueFrom:

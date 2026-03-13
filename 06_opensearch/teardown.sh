@@ -3,12 +3,12 @@
 echo "Tearing down OpenSearch Cluster and Dashboards..."
 
 # Uninstall Helm Releases
-helm uninstall opensearch-exporter -n opensearch --wait || echo "Exporter not installed"
 helm uninstall opensearch-dashboards -n opensearch --wait || echo "Dashboards not installed"
 helm uninstall opensearch -n opensearch --wait || echo "Cluster not installed"
 
 # Delete Jobs
 kubectl delete job create-exporter-user -n opensearch --ignore-not-found
+kubectl delete podmonitor opensearch-exporter -n opensearch --ignore-not-found
 
 # Delete Secrets
 kubectl delete secret opensearch-transport-certs -n opensearch --ignore-not-found

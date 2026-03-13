@@ -89,6 +89,19 @@ kubectl create secret generic opensearch-s3-secret -n opensearch \
   --from-literal=s3.client.default.secret_key="$AWS_SECRET_ACCESS_KEY" \
   --dry-run=client -o yaml | kubectl apply -f -
 
+# Create Exporter Secret (Needed for sidecar environment variables)
+if kubectl get secret opensearch-exporter-creds -n opensearch >/dev/null 2>&1; then
+  echo "Secret 'opensearch-exporter-creds' already exists. Retrieving password..."
+  EXPORTER_PASSWORD=$(kubectl get secret opensearch-exporter-creds -n opensearch -o jsonpath='{.data.password}' | base64 -d)
+else
+  echo "Creating OpenSearch Exporter credentials and user secret..."
+  EXPORTER_PASSWORD=$(openssl rand -base64 20)
+  kubectl create secret generic opensearch-exporter-creds -n opensearch \
+    --from-literal=username=prom_exporter \
+    --from-literal=password="$EXPORTER_PASSWORD" \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
+
 # Deploy OpenSearch
 echo "Deploying OpenSearch Cluster..."
 helm upgrade --install opensearch opensearch/opensearch \
@@ -113,36 +126,18 @@ kubectl rollout status statefulset/opensearch-cluster-master -n opensearch --tim
   exit 1
 }
 
-# Create Exporter User
-if kubectl get secret opensearch-exporter-creds -n opensearch >/dev/null 2>&1; then
-  echo "Secret 'opensearch-exporter-creds' already exists. Retrieving password..."
-  EXPORTER_PASSWORD=$(kubectl get secret opensearch-exporter-creds -n opensearch -o jsonpath='{.data.password}' | base64 -d)
-else
-  echo "Creating OpenSearch Exporter credentials and user..."
-  EXPORTER_PASSWORD=$(openssl rand -base64 12)
-  kubectl create secret generic opensearch-exporter-creds -n opensearch \
-    --from-literal=username=prom_exporter \
-    --from-literal=password="$EXPORTER_PASSWORD" \
-    --dry-run=client -o yaml | kubectl apply -f -
-fi
-
 # Run Job to create user in OpenSearch
 kubectl delete job create-exporter-user -n opensearch --ignore-not-found
 kubectl apply -f create-user-job.yaml
 echo "Waiting for user creation job to complete..."
 kubectl wait --for=condition=complete job/create-exporter-user -n opensearch --timeout=300s
 
-# Deploy Prometheus Exporter
-echo "Deploying Prometheus OpenSearch Exporter..."
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm upgrade --install opensearch-exporter prometheus-community/prometheus-elasticsearch-exporter \
-  -n opensearch \
-  -f exporter-values.yaml \
-  --set es.uri="http://prom_exporter:$EXPORTER_PASSWORD@opensearch-cluster-master:9200"
+# Apply PodMonitor for Sidecar scraping
+echo "Applying PodMonitor..."
+kubectl apply -f pod-monitor.yaml
 
 echo "Setup complete!"
 echo "You can check the status with: kubectl get pods -n opensearch"
 echo "You can access OpenSearch Dashboards with: kubectl port-forward -n opensearch svc/opensearch-dashboards 5601:5601"
 echo "You can access OpenSearch Cluster with: kubectl port-forward -n opensearch svc/opensearch-cluster-master 9200:9200"
-echo "You can access OpenSearch Exporter metrics with: kubectl port-forward -n opensearch svc/opensearch-exporter-prometheus-elasticsearch-exporter 9114:9114"
+echo "Note: Metrics are exposed via the OpenSearch Prometheus Exporter plugin at /_prometheus/metrics on port 9200."
