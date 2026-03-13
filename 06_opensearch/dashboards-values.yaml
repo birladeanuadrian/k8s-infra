@@ -12,3 +12,22 @@ service:
   type: ClusterIP
   port: 5601
 
+extraEnvs:
+  - name: OPENSEARCH_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: opensearch-admin-password
+        key: username
+  - name: OPENSEARCH_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: opensearch-admin-password
+        key: password
+
+config:
+  opensearch_dashboards.yml:
+    opensearch.username: "${OPENSEARCH_USERNAME}"
+    opensearch.password: "${OPENSEARCH_PASSWORD}"
+    data_source.enabled: true
+    workspace.enabled: true
+    explore.enabled: true
