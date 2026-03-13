@@ -1,0 +1,104 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-backup-policy
+  namespace: opensearch
+spec:
+  template:
+    spec:
+      containers:
+      - name: create-policy
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Waiting for OpenSearch to be ready..."
+            
+            AUTH_CRED=$(printf "admin:$ADMIN_PASSWORD" | base64)
+            
+            until curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Basic $AUTH_CRED" http://opensearch-cluster-master:9200; do
+              sleep 5
+            done
+
+            echo "Checking if Snapshot Repository 's3-repo' exists..."
+            repo_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Basic $AUTH_CRED" "http://opensearch-cluster-master:9200/_snapshot/s3-repo")
+            
+            if [ "$repo_check" -eq 404 ]; then
+                echo "Repository 's3-repo' does not exist. Creating..."
+                curl -XPUT "http://opensearch-cluster-master:9200/_snapshot/s3-repo" \
+                  -H "Authorization: Basic $AUTH_CRED" -H "Content-Type: application/json" -d "{
+                  \"type\": \"s3\",
+                  \"settings\": {
+                    \"bucket\": \"$S3_BUCKET\",
+                    \"base_path\": \"opensearch-backups\",
+                    \"path_style_access\": \"true\"
+                  }
+                }"
+                echo "Repository created."
+            else
+                echo "Repository 's3-repo' already exists."
+            fi
+
+            echo "Checking if Policy 'daily-backups' exists..."
+            policy_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Basic $AUTH_CRED" "http://opensearch-cluster-master:9200/_plugins/_sm/policies/daily-backups")
+            
+            if [ "$policy_check" -eq 200 ]; then
+                echo "Policy 'daily-backups' already exists. Exiting."
+                exit 0
+            fi
+            
+            echo "Creating 'daily-backups' policy..."
+            # Create Policy
+            response=$(curl -s -o /dev/null -w "%{http_code}" -XPOST "http://opensearch-cluster-master:9200/_plugins/_sm/policies/daily-backups" \
+              -H "Authorization: Basic $AUTH_CRED" -H "Content-Type: application/json" -d '{
+              "description": "Daily snapshot policy",
+              "creation": {
+                "schedule": {
+                  "cron": {
+                    "expression": "0 0 * * *",
+                    "timezone": "UTC"
+                  }
+                },
+                "time_limit": "1h"
+              },
+              "snapshot_config": {
+                "repository": "s3-repo",
+                "date_pattern": "yyyy-MM-dd-HH-mm",
+                "indices": "*",
+                "ignore_unavailable": true,
+                "include_global_state": true
+              },
+              "deletion": {
+                "schedule": {
+                  "cron": {
+                    "expression": "0 0 * * *",
+                    "timezone": "UTC"
+                  }
+                },
+                "condition": {
+                  "max_age": "30d",
+                  "max_count": 30,
+                  "min_count": 1
+                },
+                "time_limit": "1h"
+              }
+            }')
+            
+            if [ "$response" -eq 201 ]; then
+                echo "Policy 'daily-backups' created successfully."
+            else
+                echo "Failed to create policy. HTTP Status: $response"
+                exit 1
+            fi
+        env:
+          - name: ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin-password
+                key: password
+          - name: S3_BUCKET
+            valueFrom:
+              configMapKeyRef:
+                name: opensearch-backup-config
+                key: bucket
+      restartPolicy: OnFailure

@@ -9,7 +9,11 @@ helm uninstall opensearch -n opensearch --wait || echo "Cluster not installed"
 # Delete Jobs
 kubectl delete job update-admin-password -n opensearch --ignore-not-found
 kubectl delete job create-monitoring-user -n opensearch --ignore-not-found
-kubectl delete podmonitor opensearch-exporter -n opensearch --ignore-not-found
+kubectl delete job create-backup-policy -n opensearch --ignore-not-found
+kubectl delete servicemonitor opensearch-exporter -n opensearch --ignore-not-found
+
+# Delete ConfigMaps
+kubectl delete configmap opensearch-backup-config -n opensearch --ignore-not-found
 
 # Delete Secrets
 kubectl delete secret opensearch-transport-certs -n opensearch --ignore-not-found

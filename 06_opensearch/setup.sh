@@ -17,6 +17,7 @@ fi
 REQUIRED_VARS=(
   AWS_ACCESS_KEY_ID
   AWS_SECRET_ACCESS_KEY
+  AWS_REGION
   S3_ENDPOINT
   S3_BUCKET
 )
@@ -110,7 +111,8 @@ helm upgrade --install opensearch opensearch/opensearch \
   -f opensearch-values.yaml \
   --set "config.opensearch\.yml.s3\.client\.default\.endpoint=$S3_ENDPOINT" \
   --set "config.opensearch\.yml.s3\.client\.default\.protocol=https" \
-  --set "config.opensearch\.yml.s3\.client\.default\.path_style_access=true"
+  --set "config.opensearch\.yml.s3\.client\.default\.path_style_access=true" \
+  --set "config.opensearch\.yml.s3\.client\.default\.region=$AWS_REGION"
 
 # Deploy Dashboards
 echo "Deploying OpenSearch Dashboards..."
@@ -147,6 +149,17 @@ kubectl wait --for=condition=complete job/create-monitoring-user -n opensearch -
 # Apply PodMonitor for Sidecar scraping
 echo "Applying PodMonitor..."
 kubectl apply -f pod-monitor.yaml
+
+# Create Backup ConfigMap
+kubectl create configmap opensearch-backup-config -n opensearch \
+  --from-literal=bucket="$S3_BUCKET" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Run Job to create backup policy
+kubectl delete job create-backup-policy -n opensearch --ignore-not-found
+kubectl apply -f create-backup-policy.yaml
+echo "Waiting for backup policy creation job to complete..."
+kubectl wait --for=condition=complete job/create-backup-policy -n opensearch --timeout=300s
 
 echo "Setup complete!"
 echo "You can check the status with: kubectl get pods -n opensearch"
