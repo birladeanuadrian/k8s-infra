@@ -126,11 +126,23 @@ kubectl rollout status statefulset/opensearch-cluster-master -n opensearch --tim
   exit 1
 }
 
+# Admin Password Management
+if kubectl get secret opensearch-admin-password -n opensearch >/dev/null 2>&1; then
+  echo "Secret 'opensearch-admin-password' already exists."
+else
+  echo "Creating OpenSearch Admin password secret..."
+  ADMIN_PASSWORD="admin"  # default password. Needs to be changed manually
+  kubectl create secret generic opensearch-admin-password -n opensearch \
+    --from-literal=username=admin \
+    --from-literal=password="$ADMIN_PASSWORD" \
+    --dry-run=client -o yaml | kubectl apply -f -
+fi
+
 # Run Job to create user in OpenSearch
-kubectl delete job create-exporter-user -n opensearch --ignore-not-found
-kubectl apply -f create-user-job.yaml
-echo "Waiting for user creation job to complete..."
-kubectl wait --for=condition=complete job/create-exporter-user -n opensearch --timeout=300s
+kubectl delete job create-monitoring-user -n opensearch --ignore-not-found
+kubectl apply -f create-monitoring-user-job.yaml
+echo "Waiting for monitoring user creation job to complete..."
+kubectl wait --for=condition=complete job/create-monitoring-user -n opensearch --timeout=300s
 
 # Apply PodMonitor for Sidecar scraping
 echo "Applying PodMonitor..."

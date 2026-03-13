@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: create-exporter-user
+  name: create-monitoring-user
   namespace: opensearch
 spec:
   template:
@@ -13,8 +13,7 @@ spec:
         args:
           - |
             echo "Encoding credentials..."
-            AUTH_CRED=$(echo -n "admin:admin" | base64)
-            AUTH_HEADER="'Authorization: Basic $AUTH_CRED'"
+            AUTH_CRED=$(printf "admin:$ADMIN_PASSWORD" | base64)
 
             echo "Waiting for OpenSearch to be ready..."
             until curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Basic $AUTH_CRED" http://opensearch-cluster-master:9200; do
@@ -94,6 +93,11 @@ spec:
                exit 1
             fi
         env:
+          - name: ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin-password
+                key: password
           - name: EXPORTER_PASSWORD
             valueFrom:
               secretKeyRef:
