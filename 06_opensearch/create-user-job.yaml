@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-exporter-user
+  namespace: opensearch
+spec:
+  template:
+    spec:
+      containers:
+      - name: create-user
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Encoding credentials..."
+            AUTH_CRED=$(echo -n "admin:admin" | base64)
+            AUTH_HEADER="'Authorization: Basic $AUTH_CRED'"
+
+            echo "Waiting for OpenSearch to be ready..."
+            until curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Basic $AUTH_CRED" http://opensearch-cluster-master:9200; do
+              sleep 5
+            done
+            
+            echo "Checking if user already exists..."
+            user_check=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Basic $AUTH_CRED" "http://opensearch-cluster-master:9200/_plugins/_security/api/internalusers/prom_exporter")
+            
+            if [ "$user_check" -eq 200 ]; then
+                echo "User 'prom_exporter' already exists. Updating password/properties..."
+            elif [ "$user_check" -eq 404 ]; then
+                echo "User 'prom_exporter' does not exist. Creating..."
+            else
+                echo "Warning: Error checking user existence (HTTP $user_check). Proceeding with create/update attempt..."
+            fi
+
+            echo "Creating/Updating exporter user..."
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "http://opensearch-cluster-master:9200/_plugins/_security/api/internalusers/prom_exporter" \
+              -H "Authorization: Basic $AUTH_CRED" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"password\": \"$EXPORTER_PASSWORD\",
+                \"backend_roles\": [\"readall\", \"cluster_monitor\"]
+              }")
+            
+            if [ "$response" -eq 200 ] || [ "$response" -eq 201 ]; then
+              echo "User 'prom_exporter' created/updated successfully."
+            else
+              echo "Failed to create user. HTTP Status: $response"
+              exit 1
+            fi
+        env:
+          - name: EXPORTER_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-exporter-creds
+                key: password
+      restartPolicy: OnFailure
